@@ -5,19 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "asgen.h"
+
 struct stream
 {
    FILE* file;
    int buffer;
-};
-
-struct tokenized_unit
-{
-   char* data;
-   unsigned long length;
-   unsigned short powmul;
-   char** idents;
-   unsigned char num_idents; /*256 may be limiting. reconsider TODO*/
 };
 
 const struct type types[] = {
@@ -30,10 +23,14 @@ fetch_chunk(chunk, strm) char* chunk;
 struct stream* strm;
 {
    int i = 0;
-   while (!isalpha(strm->buffer))
-      if ((strm->buffer = fgetc(strm->file)) == EOF)
+   if ((strm->buffer) == EOF)
+      return 0;
+   while (isspace(strm->buffer))
+   {
+      if ((strm->buffer) == EOF)
          return 0;
-
+      strm->buffer = fgetc(strm->file);
+   }
    do
       chunk[i++] = (char)tolower(strm->buffer);
    while (isalpha(strm->buffer = fgetc(strm->file)));
@@ -62,6 +59,8 @@ cc(source_path, dest_path) const char* source_path, *dest_path;
    tokens.idents = malloc(sizeof(char*));
    tokens.num_idents = 0;
 
+   src.buffer = fgetc(src.file);
+
    while (fetch_chunk(chunk_buf, &src))
    {
       unsigned char tok_len = strlen(chunk_buf);
@@ -76,6 +75,15 @@ cc(source_path, dest_path) const char* source_path, *dest_path;
             tokens.data[old_size + 1] = (char)types[i].size;
             goto eoloop;
          }
+
+      if (!isalnum(chunk_buf[0]))
+      {
+         ++tokens.length;
+         if (pow(2, tokens.powmul) < tokens.length)
+            tokens.data = realloc(tokens.data, pow(2, ++tokens.powmul));
+         tokens.data[old_size] = chunk_buf[0];
+         goto eoloop;
+      }
 
       tokens.length += 3; /* + tok_len;*/
       if (pow(2, tokens.powmul) < tokens.length)
@@ -94,25 +102,26 @@ cc(source_path, dest_path) const char* source_path, *dest_path;
                goto eoloop;
             }
          }
-         tokens.idents = realloc(tokens.idents, ++tokens.num_idents);
+         tokens.idents = realloc(tokens.idents, ++tokens.num_idents * sizeof(char*));
          tokens.data[old_size + 2] = ident_id;
          tokens.idents[ident_id] = malloc(tok_len + 1);
          strcpy_s(tokens.idents[ident_id], tok_len + 1, chunk_buf);
+         goto eoloop;
       }
+
       /* memcpy_s(tokens.data + old_size + 2, tok_len, chunk_buf, tok_len);*/
 
       printf_s("%d |%c|", tokens.data[old_size + 1], tokens.data[old_size + 1]);
    eoloop:
       printf_s("Token %s\n", chunk_buf);
    }
-   for (i = 0; i < tokens.length; i++)
-   {
-      printf_s("%c", tokens.data[i]);
-   }
-   printf_s("\n");
    for (i = 0; i < tokens.num_idents; i++)
    {
       printf_s("%s\n", tokens.idents[i], strlen(tokens.idents[i]) + 1);
+   }
+   for (i = 0; i < tokens.length; i++)
+   {
+      printf_s("%c", tokens.data[i]);
    }
 
    if (src.file)
@@ -123,7 +132,9 @@ cc(source_path, dest_path) const char* source_path, *dest_path;
 
    /*write output*/
    fopen_s(&dest_file, dest_path, "wt");
-   fwrite(output, sizeof(char), strlen(output), dest_file);
+   gen_as(&tokens, dest_file);
+   /* fwrite(output, sizeof(char), strlen(output), dest_file);*/
+
    if (dest_file)
       fclose(dest_file);
 

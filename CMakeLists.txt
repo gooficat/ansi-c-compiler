@@ -15,6 +15,7 @@ cmake_minimum_required(VERSION 3.15)
     add_executable(ansi-c-compiler 
         src/main.c
         src/cc.c
+        src/asgen.c
     )
     
     # Compiler-specific options
