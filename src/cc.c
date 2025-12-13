@@ -1,20 +1,131 @@
 #include "cc.h"
+#include <ctype.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-cc(source, dest) const char* source, *dest;
+struct stream
 {
-   FILE *source_file, *dest_file;
-   unsigned long line_num = 0;
-   char line_buf[LINE_MAX_LEN];
+   FILE* file;
+   int buffer;
+};
 
-   fopen_s(&source_file, source, "rt");
+struct tokenized_unit
+{
+   char* data;
+   unsigned long length;
+   unsigned short powmul;
+   char** idents;
+   unsigned char num_idents; /*256 may be limiting. reconsider TODO*/
+};
 
-   printf_s("Now reading from:\n%s\n", source);
+const struct type types[] = {
+    {"byte", 1},  /**/
+    {"short", 2}, /**/
+    {"int", 4},
+};
 
-   while (fgets(line_buf, LINE_MAX_LEN, source_file))
+fetch_chunk(chunk, strm) char* chunk;
+struct stream* strm;
+{
+   int i = 0;
+   while (!isalpha(strm->buffer))
+      if ((strm->buffer = fgetc(strm->file)) == EOF)
+         return 0;
+
+   do
+      chunk[i++] = (char)tolower(strm->buffer);
+   while (isalpha(strm->buffer = fgetc(strm->file)));
+
+   chunk[i] = 0;
+   return 1;
+}
+
+cc(source_path, dest_path) const char* source_path, *dest_path;
+{
+   struct stream src = {0, 0};
+   char chunk_buf[CHUNK_MAX_LEN];
+   char* output = NULL;
+   FILE* dest_file;
+   unsigned long i, old_size;
+
+   struct tokenized_unit tokens;
+
+   fopen_s(&src.file, source_path, "rt");
+
+   printf_s("Now reading from:\n%s\n", source_path);
+
+   tokens.data = malloc(4);
+   tokens.length = 0;
+   tokens.powmul = 2;
+   tokens.idents = malloc(sizeof(char*));
+   tokens.num_idents = 0;
+
+   while (fetch_chunk(chunk_buf, &src))
    {
-      printf_s("%llu: %s", line_num++, line_buf, LINE_MAX_LEN);
+      unsigned char tok_len = strlen(chunk_buf);
+      old_size = tokens.length;
+      for (i = 0; i < sizeof(types) / sizeof(struct type); i++)
+         if (!strcmp(chunk_buf, types[i].name)) /*TODO add a more sophisticated type system!*/
+         {
+            tokens.length += 2;
+            if (pow(2, tokens.powmul) < tokens.length)
+               tokens.data = realloc(tokens.data, pow(2, ++tokens.powmul));
+            tokens.data[old_size] = TK_TYP;
+            tokens.data[old_size + 1] = (char)types[i].size;
+            goto eoloop;
+         }
+
+      tokens.length += 3; /* + tok_len;*/
+      if (pow(2, tokens.powmul) < tokens.length)
+         tokens.data = realloc(tokens.data, pow(2, ++tokens.powmul));
+      tokens.data[old_size] = TK_IDT;
+      tokens.data[old_size + 1] = tok_len;
+
+      {
+         unsigned char ident_id = tokens.num_idents;
+         unsigned long j;
+         for (j = 0; j < ident_id; j++)
+         {
+            if (!strcmp(chunk_buf, tokens.idents[j]))
+            {
+               tokens.data[old_size + 2] = j;
+               goto eoloop;
+            }
+         }
+         tokens.idents = realloc(tokens.idents, ++tokens.num_idents);
+         tokens.data[old_size + 2] = ident_id;
+         tokens.idents[ident_id] = malloc(tok_len + 1);
+         strcpy_s(tokens.idents[ident_id], tok_len + 1, chunk_buf);
+      }
+      /* memcpy_s(tokens.data + old_size + 2, tok_len, chunk_buf, tok_len);*/
+
+      printf_s("%d |%c|", tokens.data[old_size + 1], tokens.data[old_size + 1]);
+   eoloop:
+      printf_s("Token %s\n", chunk_buf);
    }
+   for (i = 0; i < tokens.length; i++)
+   {
+      printf_s("%c", tokens.data[i]);
+   }
+   printf_s("\n");
+   for (i = 0; i < tokens.num_idents; i++)
+   {
+      printf_s("%s\n", tokens.idents[i], strlen(tokens.idents[i]) + 1);
+   }
+
+   if (src.file)
+      fclose(src.file);
+
+   output = malloc(1);
+   output[0] = 0;
+
+   /*write output*/
+   fopen_s(&dest_file, dest_path, "wt");
+   fwrite(output, sizeof(char), strlen(output), dest_file);
+   if (dest_file)
+      fclose(dest_file);
 
    return 0;
 }
