@@ -11,6 +11,8 @@ extern HANDLE STDOUTPUTHANDLE;
 #define RED FOREGROUND_RED
 #define GREEN FOREGROUND_GREEN
 #define WHITE RED | GREEN | BLUE
+#define YELLOW RED | GREEN
+#define PURPLE RED | BLUE
 
 #define SETCOLOR(color) SetConsoleTextAttribute(STDOUTPUTHANDLE, color)
 
