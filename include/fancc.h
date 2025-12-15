@@ -1,5 +1,4 @@
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #ifdef FANCC_IMPLEMENTATION
 HANDLE STDOUTPUTHANDLE;
@@ -31,6 +30,4 @@ extern HANDLE STDOUTPUTHANDLE;
 #define FANCYPRINT(...) printf_s(__VA_ARGS__)
 #endif
 
-#define fancc(c, ...)                                                                              \
-   SETCOLOR(c);                                                                                    \
-   FANCYPRINT(__VA_ARGS__);
+#define fancc(c, ...) SETCOLOR(c), FANCYPRINT(__VA_ARGS__);

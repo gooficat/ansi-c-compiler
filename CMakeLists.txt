@@ -23,9 +23,9 @@ cmake_minimum_required(VERSION 3.15)
     
     # Compiler-specific options
     if(MSVC)
-        target_compile_options(ansi-c-compiler PRIVATE /W4)
+        target_compile_options(ansi-c-compiler PRIVATE /W4 /fsanitize=address)
     else()
-        target_compile_options(ansi-c-compiler PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(ansi-c-compiler PRIVATE -Wall -Wextra -Wpedantic -fsanitize=address)
     endif()
     
     # Debug configuration

@@ -1,5 +1,8 @@
-#include "asm.h"
+#include <stdint.h>
 #include "fancc.h"
+//
+#undef addr
+#include "asm.h"
 #include "file.h"
 
 enu_m{
@@ -21,6 +24,8 @@ token_s;
 
 enu_m{
     ARG_IMM,  //
+    ARG_REG,  //
+    ARG_MEM   //
 } argtype_e;
 
 struc_t
@@ -28,6 +33,7 @@ struc_t
    argtype_e type;  //
    bytes_e size;
    u64 val;
+   u64 offset;  // more needed
 }
 arg_s;
 
@@ -46,6 +52,7 @@ void assemble(const str path)
 
    asm_unit_s unit = {mk_arr(byte), mk_arr(label_s)};
    gen_bytes(addr tokens, addr unit, true);
+   unit.bytes.len = 0;
    gen_bytes(addr tokens, addr unit,
              false);  // I decided this was less confusing than just having it call itself again
                       // without the flag
@@ -107,12 +114,60 @@ tokenarr_t fetch_tokens(filestream_s ptr in_stream)
    return tokens;
 }
 
+void encode_statement(str mnem, arg_s args[], u8 st_argc, asm_unit_s ptr unit,
+                      bool place_output)  // this boolean corresponds with mark labels
+{
+   switch (st_argc)
+   {
+   case 0:
+      ++unit->bytes.len;
+      break;
+   case 1:
+      switch (args[0].type)
+      {
+      case ARG_IMM:
+         unit->bytes.len += args[0].size;
+         if (place_output)
+         {
+         }
+         break;
+      case ARG_REG:
+         unit->bytes.len += 1;  // must also add prefix
+         if (place_output)
+         {
+         }
+      case ARG_MEM:
+         // TODO add memory deref encode
+         if (place_output)
+         {
+         }
+         break;
+      }
+      break;
+   case 2:
+      if (args[0].type == ARG_REG)
+         break;
+   case 3:
+      break;
+   default:
+      break;
+   }
+
+   unit->bytes.len += 1;  // TODO add instruction profile checking system
+}
+
 void gen_bytes(tokenarr_t ptr tokens, asm_unit_s ptr unit, bool mark_labels)
 {
+   // if mark labels is true we will use the unit's byte array counter to store our current offset,
+   // without actually filling in the array though.
    for (u64 i = 0; i < tokens->len; i++)
    {
+      SETCOLOR(GREEN);
       if (mark_labels)
-         fancc(GREEN, "Labeling pass: ");
+         printf("Labeling pass: ");
+      else
+         printf("Non-labeling pass: ");
+
       switch (tokens->get[i].type)
       {
       case TK_LBDEC:
@@ -125,46 +180,43 @@ void gen_bytes(tokenarr_t ptr tokens, asm_unit_s ptr unit, bool mark_labels)
             strcpy_s(label.name, TOK_MAX, tokens->get[i].content);
 
             unit->labels.get[unit->labels.len - 1] = label;
-         }  // 130
+         }  // 200
          break;
       case TK_KW:
       {
-         char* mnem = tokens->get[i].content;
-         u64 st_beg = ++i;
+         str mnem = tokens->get[i++].content;
+         fancc(BLUE, "call of %s\n", mnem);
          u8 st_argc = 0;
          arg_s args[MAX_ARGS];
-         while (tokens->get[i + 1].type is TK_CMA)
+         u8 is_eoargs = 2;  // is end of args
+         while (is_eoargs)
          {
+            if (is_eoargs == 1 or tokens->get[i + 1].type is TK_CMA)
+               --is_eoargs;
             if (tokens->get[i].type is TK_NUM)
             {
                args[st_argc].type = ARG_IMM;
-               // args[st_argc].size = ;
-               char* eoa = tokens->get[i].content + strlen(tokens->get[i].content);
-               args[st_argc].val = strtoull(tokens->get[i].content, &eoa, 10);
+               char* eoa =
+                   tokens->get[i].content + strlen(tokens->get[i].content);  // end of argument
+               u64 asiz = strtoull(tokens->get[i].content, &eoa, 10);
+
+               args[st_argc].val = asiz;
                i += 2;
-               fancc(YELLOW, "%llu\n", args[st_argc].val);
+               fancc(YELLOW, "arg of %llu\n", args[st_argc].val);
+               if (asiz <= UINT64_MAX)
+                  args[st_argc].size = SZQWORD;
+               elif (asiz <= UINT32_MAX) args[st_argc].size = SZDWORD;
+               elif (asiz <= UINT16_MAX) args[st_argc].size = SZWORD;
+               else args[st_argc].size = SZBYTE;
+               ++st_argc;
             }
             else
             {
                i += 2;
             }
          }
-
-         switch (st_argc)
-         {
-         case 0:
-            break;
-         case 1:
-            break;
-         case 2:
-            break;
-         case 3:
-            break;
-         default:
-            break;
-         }
-
-         fancc(BLUE, "call of %s with %hhu args, first arg at %c\n", mnem, st_argc);
+         fancc(PURPLE, "Mnemonic %s\n", mnem);
+         encode_statement(mnem, args, st_argc, unit, mark_labels);
       }
       break;
       case TK_CMT:

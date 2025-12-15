@@ -1,6 +1,6 @@
-#include "asm.h"
-
 #include "fancc.h"
+//
+#include "asm.h"
 
 int main(void)
 {
