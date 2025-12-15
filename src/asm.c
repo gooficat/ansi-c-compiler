@@ -1,6 +1,5 @@
-#include "fancc.h"
-#undef addr
 #include "asm.h"
+#include "fancc.h"
 #include "file.h"
 
 enu_m{
@@ -19,6 +18,19 @@ struc_t
    char* content;
 }
 token_s;
+
+enu_m{
+    ARG_IMM,  //
+} argtype_e;
+
+struc_t
+{
+   argtype_e type;  //
+   bytes_e size;
+   u64 val;
+}
+arg_s;
+
 typedef array_type(token_s) tokenarr_t;
 
 tokenarr_t fetch_tokens(filestream_s ptr in_stream);
@@ -34,6 +46,9 @@ void assemble(const str path)
 
    asm_unit_s unit = {mk_arr(byte), mk_arr(label_s)};
    gen_bytes(addr tokens, addr unit, true);
+   gen_bytes(addr tokens, addr unit,
+             false);  // I decided this was less confusing than just having it call itself again
+                      // without the flag
 }
 
 tokenarr_t fetch_tokens(filestream_s ptr in_stream)
@@ -96,6 +111,8 @@ void gen_bytes(tokenarr_t ptr tokens, asm_unit_s ptr unit, bool mark_labels)
 {
    for (u64 i = 0; i < tokens->len; i++)
    {
+      if (mark_labels)
+         fancc(GREEN, "Labeling pass: ");
       switch (tokens->get[i].type)
       {
       case TK_LBDEC:
@@ -108,19 +125,50 @@ void gen_bytes(tokenarr_t ptr tokens, asm_unit_s ptr unit, bool mark_labels)
             strcpy_s(label.name, TOK_MAX, tokens->get[i].content);
 
             unit->labels.get[unit->labels.len - 1] = label;
-         }
+         }  // 130
          break;
       case TK_KW:
       {
          char* mnem = tokens->get[i].content;
          u64 st_beg = ++i;
+         u8 st_argc = 0;
+         arg_s args[MAX_ARGS];
          while (tokens->get[i + 1].type is TK_CMA)
-            i += 2;
-         u8 st_argc = (i - st_beg) / 2 + 1;  // I do not know why it works, but do not touch it
-         fancc(BLUE, "Call of %s with %hhu args\n", mnem, st_argc);
-         break;
+         {
+            if (tokens->get[i].type is TK_NUM)
+            {
+               args[st_argc].type = ARG_IMM;
+               // args[st_argc].size = ;
+               char* eoa = tokens->get[i].content + strlen(tokens->get[i].content);
+               args[st_argc].val = strtoull(tokens->get[i].content, &eoa, 10);
+               i += 2;
+               fancc(YELLOW, "%llu\n", args[st_argc].val);
+            }
+            else
+            {
+               i += 2;
+            }
+         }
+
+         switch (st_argc)
+         {
+         case 0:
+            break;
+         case 1:
+            break;
+         case 2:
+            break;
+         case 3:
+            break;
+         default:
+            break;
+         }
+
+         fancc(BLUE, "call of %s with %hhu args, first arg at %c\n", mnem, st_argc);
       }
+      break;
       case TK_CMT:
+         fancc(FOREGROUND_INTENSITY | WHITE, "comment\n");
          ++i;
          while (tokens->get[i].type notis TK_CMT)
             ++i;
@@ -130,4 +178,5 @@ void gen_bytes(tokenarr_t ptr tokens, asm_unit_s ptr unit, bool mark_labels)
          break;
       }
    }
+   fancc(RED, "Byte pass %scomplete\n\n", mark_labels ? "with labeling " : "");
 }

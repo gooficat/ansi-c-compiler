@@ -18,6 +18,7 @@ cmake_minimum_required(VERSION 3.15)
         src/arr.c
         src/fancc.c
         src/file.c
+        src/spec.c
     )
     
     # Compiler-specific options
